@@ -216,3 +216,46 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Paper LaTeX source (not for release)
+paper/
+
+# ============================================================
+# Project-specific (rethinking-diffusion-rl) — push control
+# ============================================================
+# Large / generated / build artifacts — never pushed
+logs/
+sbatch_logs/
+reward_ckpts/
+models/
+mmcv/
+mmdetection/
+trash/
+old_logs/
+
+# Local dev aids — NOT part of the public release
+CLAUDE.md
+.claude/
+
+# Cluster-orchestration local state (auto-resubmit daemon)
+.monitor_pid
+ops/.job_marker_*
+ops/.job_done_*
+ops/.monitor_pid
+ops/*.log
+ops/excluded_nodes.txt
+
+# HuggingFace / wandb local caches
+.cache/
+wandb/
+
+# Paper LaTeX source / drafts (nested repo) — not part of the code release
+paper/
+
+# Local Claude Code project instructions (not for release)
+CLAUDE.md
+
+# Evaluation code (excluded from release)
+evaluation.py
+src/evaluation.py
+scripts/eval/
