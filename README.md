@@ -2,7 +2,7 @@
 
 ### On the Importance of Likelihood Estimation Beyond Loss Design
 
-[![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b)](https://arxiv.org/abs/XXXX.XXXXX)
+[![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b)](https://arxiv.org/abs/2602.04663)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![ICML](https://img.shields.io/badge/ICML-2026-8A2BE2)](https://icml.cc/)
 
