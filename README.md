@@ -9,8 +9,8 @@
 This is the official implementation of **Rethinking the Design Space of Reinforcement Learning for Diffusion Models**.
 
 <p align="center">
-  <img src="assets/training_curves_eval_reward.png" width="62%" />
-  <img src="assets/concept.png" width="34%" />
+  <img src="assets/training_curves_eval_reward.png" width="66.6%" />
+  <img src="assets/concept.png" width="29%" />
 </p>
 
 > **Training efficiency and design-space analysis for reward-based diffusion fine-tuning.**
@@ -27,29 +27,21 @@ We provide a systematic analysis of the RL design space for diffusion/flow model
 
 ## Environment Installation
 
-The image training stack lives in a single conda env (`image_elbo`). It is pinned to specific versions because the image reward models depend on legacy builds of **MMCV 1.7.2** and **MMDetection 2.28.2** (do not upgrade these).
+Training runs in a single pinned conda env (`image_elbo`). The versions are fixed because the image reward models require legacy **MMCV 1.7.2** and **MMDetection 2.28.2** — do not upgrade these.
 
 **Core versions:** Python 3.10.16 · CUDA 12.6 · PyTorch 2.6.0 · torchvision 0.21.0 · transformers 4.40.0 · diffusers 0.33.1 · accelerate 1.4.0 · peft 0.10.0 · deepspeed 0.16.4 · numpy 1.26.4 · tokenizers 0.19.1
 
-**One-shot setup script** (run on a GPU node — it builds MMCV/MMDet CUDA ops and downloads reward checkpoints):
+Run the one-shot setup on a GPU node (it builds MMCV/MMDet CUDA ops and downloads reward checkpoints):
 
 ```bash
-# Allocate a GPU node first, e.g.:
-#   srun --time=4:00:00 --gres=gpu:h100:1 --pty --cpus-per-task=4 --mem-per-cpu=6G bash
-
-git clone https://github.com/<your-org>/rethinking-diffusion-rl.git
+git clone https://github.com/jaemoo-choi/rethinking-diffusion-rl.git
 cd rethinking-diffusion-rl
 bash ops/setup/setup_image_elbo.sh
 ```
 
-The script:
-1. Creates the `image_elbo` conda env (Python 3.10.16) and `pip install -e .` (see `setup.py`).
-2. Installs `flash-attn` (non-blocking; the run continues if the build fails).
-3. Downloads reward checkpoints into `reward_ckpts/` (Aesthetic predictor, Mask2Former for GenEval, LAION CLIP-ViT-H-14, HPS-v2.1).
-4. Builds **MMCV 1.7.2** and **MMDetection 2.28.2** with CUDA ops.
-5. Installs extra reward packages (open-clip, PaddleOCR 2.9.1 for OCR reward, HPSv2, ImageReward, OpenAI CLIP).
+The script creates the `image_elbo` env, `pip install -e .`, installs `flash-attn`, builds MMCV/MMDetection, downloads reward checkpoints into `reward_ckpts/` (Aesthetic, Mask2Former for GenEval, LAION CLIP-ViT-H-14, HPS-v2.1), and installs the extra reward packages (open-clip, PaddleOCR 2.9.1, HPSv2, ImageReward, OpenAI CLIP).
 
-**Activate the env** (paths come from `config/paths.sh` — the single source of truth for `HF_HOME`, conda paths, and W&B entity; source it in every shell script instead of hardcoding paths):
+Activate the env:
 
 ```bash
 source config/paths.sh
@@ -57,7 +49,7 @@ source "${CONDA_SH}"
 conda activate "${CONDA_ENV_IMAGE}"
 ```
 
-> **HuggingFace cache:** all weights are cached at `HF_HOME` (defined in `config/paths.sh`) in **offline mode** by default. Never download to `~/.cache`.
+> **HuggingFace cache:** weights are cached at `HF_HOME` (from `config/paths.sh`) in offline mode. Never download to `~/.cache`.
 
 ## Project Structure
 
@@ -109,15 +101,16 @@ All reward scoring lives in `src/reward/`; `multi_score()` in `rewards.py` aggre
 
 ## Training
 
-Training is launched with `torchrun`. Each config name maps to a function in `config/<model>.py` (dispatched via `get_config`). ODE variants come first; SDE variants are suffixed `_sde`.
+Each run is a self-contained SLURM script under `scripts/<model>/` — launch it directly:
 
 ```bash
-source config/paths.sh
-source "${CONDA_SH}" && conda activate "${CONDA_ENV_IMAGE}"
-
-# SD 3.5 Medium on GenEval with ELBO-based likelihood estimation
-torchrun --nproc_per_node=8 src/train.py --config config/sd3.py:sd3_geneval
+sbatch scripts/sd3/sd3_geneval_epg.sh       # SD3.5-M on GenEval, EPG + ELBO/ODE (our method)
+sbatch scripts/sd3/sd3_geneval_pepg.sh      # PEPG objective
+sbatch scripts/sd3/sd3_geneval_par.sh       # PAR objective
+sbatch scripts/flux/flux_flow_grpo.sh       # Flux, FlowGRPO baseline
 ```
+
+Each script sources `config/paths.sh`, activates `image_elbo`, and calls `src/train.py` with its config in `config/<model>.py` (dispatched via `get_config`). ODE variants come first; SDE variants are suffixed `_sde`.
 
 Representative SD3 configs (`config/sd3.py`):
 
@@ -130,9 +123,8 @@ Representative SD3 configs (`config/sd3.py`):
 | `sd3_hpsv2` | HPS-v2 | Human preference |
 | `sd3_multi_reward` | Multiple | Weighted combination |
 | `sd3_pickscore_flow_grpo` | PickScore | FlowGRPO (trajectory-based) baseline |
-| `sd3_geneval_diffusionnft_4step_shift5` | GenEval | DiffusionNFT baseline, 4-step |
 
-Flux (`config/flux.py`: `flux_geneval`, `flux_geneval_flow_grpo`, …) follows the same pattern. On the cluster, ready-made SLURM scripts live in `scripts/<model>/` (e.g. `scripts/sd3/sd3_geneval_epg.sh`).
+Flux (`config/flux.py`: `flux_geneval`, `flux_geneval_flow_grpo`, …) follows the same pattern.
 
 ## Results
 
@@ -141,6 +133,41 @@ Flux (`config/flux.py`: `flux_geneval`, `flux_geneval_flow_grpo`, …) follows t
 </p>
 
 > **Training time comparison on GenEval.** Total GPU hours (8× H100) required to reach a GenEval score of 0.95. ELBO-based likelihood estimation substantially reduces training cost compared to trajectory-based approaches, and ODE sampling further improves efficiency at the same target performance.
+
+**Evaluation results across tasks and reward settings.** GenEval/OCR are evaluated on their own test splits; other rewards on DrawBench. **Bold** = best within each task block. † = evaluated on official checkpoints; ‡ = evaluated at 1024×1024.
+
+| Task | Model | GenEval | OCR | PickScore | ClipScore | HPSv2.1 | Aesthetic | ImgRwd |
+|------|-------|:-------:|:---:|:---------:|:---------:|:-------:|:---------:|:------:|
+| _Baselines_ | SD-XL‡ | 0.55 | 0.14 | 22.42 | 0.287 | 0.280 | 5.60 | 0.76 |
+| | SD3.5-L‡ | 0.71 | 0.68 | 22.91 | 0.289 | 0.288 | 5.50 | 0.96 |
+| | FLUX.1-Dev | 0.66 | 0.59 | 22.84 | 0.295 | 0.274 | 5.71 | 0.96 |
+| | SD3.5-M | 0.24 | 0.12 | 20.51 | 0.237 | 0.204 | 5.13 | −0.58 |
+| | SD3.5-M + CFG | 0.63 | 0.59 | 22.34 | 0.285 | 0.279 | 5.36 | 0.85 |
+| **GenEval** | FlowGRPO† | 0.95 | – | 22.51 | 0.293 | 0.274 | 5.32 | 1.06 |
+| | AWM | 0.89 | – | 22.00 | 0.302 | 0.242 | 4.94 | 0.84 |
+| | DiffusionNFT | 0.95 | – | **22.88** | 0.303 | **0.289** | 5.25 | 1.21 |
+| | **Ours** | **0.96** | – | 22.85 | **0.305** | **0.289** | **5.33** | **1.26** |
+| **OCR** | FlowGRPO† | – | 0.92 | 22.41 | 0.290 | 0.280 | 5.32 | 0.95 |
+| | AWM | – | 0.80 | 20.70 | 0.301 | 0.206 | 4.53 | −0.13 |
+| | DiffusionNFT | – | 0.93 | 22.09 | 0.307 | 0.277 | 5.17 | 0.97 |
+| | **Ours** | – | **0.94** | **22.93** | **0.315** | **0.302** | **5.33** | **1.34** |
+| **DrawBench** | FlowGRPO† | – | – | 23.50 | 0.280 | 0.316 | 5.90 | 1.29 |
+| | DiffusionNFT | – | – | 23.61 | 0.288 | **0.344** | 6.04 | **1.46** |
+| | **Ours** | – | – | **23.68** | **0.296** | 0.325 | **6.06** | 1.45 |
+
+**Effect of likelihood estimation and sampling strategy across policy-gradient objectives (GenEval).** GenEval is the in-domain reward. Differences across policy-gradient objectives are minor — under ELBO estimation, ODE sampling matches SDE at lower training cost.
+
+| Loss | Likelihood Est. | Sampler | GenEval | PickScore | ClipScore | HPSv2.1 | Aesthetic | ImgRwd |
+|------|-----------------|---------|:-------:|:---------:|:---------:|:-------:|:---------:|:------:|
+| EPG | Traj. | SDE | 0.92 | 21.39 | 0.301 | 0.240 | 4.55 | 0.83 |
+| EPG | Traj. | SDE w/ CFG | 0.95 | 22.48 | 0.308 | 0.263 | 5.12 | 1.15 |
+| EPG | ELBO | SDE | 0.90 | 22.00 | 0.297 | 0.252 | 5.03 | 0.75 |
+| EPG | ELBO | ODE | 0.96 | 22.77 | 0.304 | 0.281 | 5.33 | 1.19 |
+| PEPG | ELBO | SDE | 0.96 | 23.25 | 0.305 | 0.302 | 5.47 | 1.35 |
+| PEPG | ELBO | ODE | 0.96 | 22.85 | 0.305 | 0.289 | 5.33 | 1.26 |
+| PAR | ELBO | SDE | 0.94 | 22.79 | 0.300 | 0.281 | 5.26 | 1.16 |
+| PAR | ELBO | ODE | 0.96 | 22.97 | 0.302 | 0.300 | 5.42 | 1.35 |
+| GRPO | ELBO | ODE | 0.94 | 22.45 | 0.306 | 0.272 | 5.10 | 1.03 |
 
 <p align="center">
   <img src="assets/all_comparisons4.png" width="90%" />

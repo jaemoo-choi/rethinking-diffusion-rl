@@ -184,38 +184,6 @@ def sd3_geneval_diffusionnft_4step_shift12():
     return config
 
 
-def sd3_geneval_4step_shift5():
-    """SD3.5-medium on GenEval, 4-step DPM2 sampling with flow-matching
-    shift=5.0.
-
-    Identical to ``sd3_geneval_4step_shift12`` except the flow-matching
-    ``shift`` is 5.0 instead of 12.0. Distinct ``config.name`` so checkpoints
-    land in ``logs/sd3_geneval_4step_shift5/``. Drive from
-    ``scripts/sd3_geneval_4step_shift5_pepg_noratio_std_beta0.sh``.
-    """
-    config = sd3_geneval_4step_shift12()
-    config.name = "sd3_geneval_4step_shift5"
-    config.sample.shift = 5.0
-    config.save_dir = f"logs/{config.name}/{config.run_name}"
-    return config
-
-
-def sd3_geneval_diffusionnft_4step_shift5():
-    """DiffusionNFT contrastive flow-matching loss on the 4-step / shift=5.0
-    SD3 GenEval recipe (see ``sd3_geneval_4step_shift5``).
-
-    Same as ``sd3_geneval_diffusionnft_4step_shift12`` but with shift=5.0.
-    Drive from ``scripts/sd3_geneval_4step_shift5_diffusionnft_beta0.sh``.
-    Checkpoints land in ``logs/sd3_geneval_diffusionnft_4step_shift5/``.
-    """
-    config = sd3_geneval_4step_shift5()
-    config.name = "sd3_geneval_diffusionnft_4step_shift5"
-    config.train.diffusionnft_beta = float(os.getenv("DIFFUSIONNFT_BETA", "0.1"))
-    config.run_name = config.run_name + f"_nftg{config.train.diffusionnft_beta}"
-    config.save_dir = f"logs/{config.name}/{config.run_name}"
-    return config
-
-
 # ============================================
 # SD3 SDE base config
 # ============================================
